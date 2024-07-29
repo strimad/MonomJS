@@ -2,11 +2,11 @@ class Monom {
     static state = {};
     static bindedElements = {};
 
-    constructor(model) {
+    static setStateModel(model) {
         Monom.state = model;
     }
 
-    init(view) {
+    static init(view) {
         const elements = view.querySelectorAll('[data-bind]')
         elements.forEach(element => {
             //const id = crypto.randomUUID();
@@ -22,10 +22,10 @@ class Monom {
                 Monom.bindedElements[bindAttr].push({ element, propType, propName });
                 const [model, object] = Monom.pathFromObject(Monom.state, bindAttr)
                 if (propType == "attr") {
-                    this.getMutationObserver(bindAttr).observe(element, { attributes: true, attributeOldValue: true });
+                    Monom.getMutationObserver(bindAttr).observe(element, { attributes: true, attributeOldValue: true });
                 } else {
-                    const [listener, property] = this.getListenerForElement(element);
-                    this.setElementListener(element, listener, property, bindAttr);
+                    const [listener, property] = Monom.getListenerForElement(element);
+                    Monom.setElementListener(element, listener, property, bindAttr);
                     Monom.updateDomElement(element, propName, propType, model, object);
                 }
             })
@@ -59,7 +59,7 @@ class Monom {
         })
     }
 
-    static createReferenceObject(obj, objBase = null, objKey = null) {
+    static createReferenceToObject(obj, objBase, objKey = null) {
         if (objKey) {
             const allKeys = { objKey, keys: Monom.objectToPaths(objBase[objKey]) };
             Monom.updateDom(obj, allKeys);
@@ -67,7 +67,7 @@ class Monom {
         return obj;
     }
 
-    setNewValue(key, value, sender) {
+    static setNewValue(key, value, sender) {
         const [model, object] = Monom.pathFromObject(Monom.state, key)
         model[object] = value;
         const elements = Monom.bindedElements[key];
@@ -103,7 +103,7 @@ class Monom {
         return [model, object];
     }
 
-    getMutationObserver(path) {
+    static getMutationObserver(path) {
         return new MutationObserver(entries => {
             entries.forEach(entry => {
                 const attributeName = entry.attributeName;
@@ -111,22 +111,22 @@ class Monom {
                 const value = entry.target.getAttribute(attributeName);
                 if (value == entry.oldValue) return;
                 /*const id = entry.target.getAttribute("data-id");
-                if (this.elements[id][attributeName]) {
-                    this.elements[id][attributeName].model[this.elements[id][attributeName].object] = value;
+                if (Monom.elements[id][attributeName]) {
+                    Monom.elements[id][attributeName].model[Monom.elements[id][attributeName].object] = value;
                 }*/
-                this.setNewValue(path, value, entry.target)
+                Monom.setNewValue(path, value, entry.target)
             })
         });
     }
 
-    setElementListener(element, listener, property, path) {
+    static setElementListener(element, listener, property, path) {
         element.addEventListener(listener, (event) => {
             event.preventDefault();
-            this.setNewValue(path, element[property], element)
+            Monom.setNewValue(path, element[property], element)
         })
     }
 
-    getListenerForElement(element) {
+    static getListenerForElement(element) {
         switch (element.nodeName.toLowerCase()) {
             case "input":
                 switch (element.getAttribute("type")) {
