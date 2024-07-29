@@ -21,13 +21,11 @@ class Monom {
                 }
                 Monom.bindedElements[bindAttr].push({ element, propType, propName });
                 const [model, object] = Monom.pathFromObject(Monom.state, bindAttr)
-                if (propType == "attr") {
-                    Monom.getMutationObserver(bindAttr).observe(element, { attributes: true, attributeOldValue: true });
-                } else {
-                    const [listener, property] = Monom.getListenerForElement(element);
-                    Monom.setElementListener(element, listener, property, bindAttr);
-                    Monom.updateDomElement(element, propName, propType, model, object);
-                }
+                if (propType == "attr") return
+                    //Monom.getMutationObserver(bindAttr).observe(element, { attributes: true, attributeOldValue: true });
+                const [listener, property] = Monom.getListenerForElement(element);
+                Monom.setElementListener(element, listener, property, bindAttr);
+                Monom.updateDomElement(element, propName, propType, model, object);
             })
         });
     }
@@ -72,9 +70,8 @@ class Monom {
         model[object] = value;
         const elements = Monom.bindedElements[key];
         elements.forEach(element => {
-            if(element.element != sender) {
-                Monom.updateDomElement(element.element, element.propName, element.propType, model, object);
-            }
+            if(element.element == sender) return
+            Monom.updateDomElement(element.element, element.propName, element.propType, model, object);
         })
     }
 
@@ -103,21 +100,21 @@ class Monom {
         return [model, object];
     }
 
-    static getMutationObserver(path) {
+    /*static getMutationObserver(path) {
         return new MutationObserver(entries => {
             entries.forEach(entry => {
                 const attributeName = entry.attributeName;
                 if (attributeName == "data-id") return
                 const value = entry.target.getAttribute(attributeName);
                 if (value == entry.oldValue) return;
-                /*const id = entry.target.getAttribute("data-id");
+                const id = entry.target.getAttribute("data-id");
                 if (Monom.elements[id][attributeName]) {
                     Monom.elements[id][attributeName].model[Monom.elements[id][attributeName].object] = value;
-                }*/
+                }
                 Monom.setNewValue(path, value, entry.target)
             })
         });
-    }
+    }*/
 
     static setElementListener(element, listener, property, path) {
         element.addEventListener(listener, (event) => {
@@ -127,23 +124,18 @@ class Monom {
     }
 
     static getListenerForElement(element) {
-        switch (element.nodeName.toLowerCase()) {
-            case "input":
-                switch (element.getAttribute("type")) {
-                    case "text":
-                        return ["input", "value"]
-                    case "checkbox":
-                        return ["change", "checked"]
-                    case "radio":
-                        return ["change", "checked"]
-                    case "range":
-                        return ["change", "value"]
-                    default:
-                        return ["input", "value"]
-                }
-            default:
-                return { listener: null, property: null }
+        const nodeName = element.nodeName.toLowerCase();
+        if (nodeName === "input") {
+            const type = element.getAttribute("type");
+            const inputTypes = {
+                "text":     ["input", "value"],
+                "checkbox": ["change", "checked"],
+                "radio":    ["change", "checked"],
+                "range":    ["change", "value"]
+            };
+            return inputTypes[type] || ["input", "value"];
         }
+        return [ null, null ];
     }
 }
 
