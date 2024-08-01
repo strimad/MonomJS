@@ -7,27 +7,35 @@ class Monom {
     }
 
     static init(view) {
+        Monom.getMutationObserver().observe(view, { childList: true, subtree: true });
+        Monom.getBindedElements(view)
+    }
+
+    static getBindedElements(view) {
         const elements = view.querySelectorAll('[data-bind]')
         elements.forEach(element => {
             //const id = crypto.randomUUID();
             //element.setAttribute("data-id", id);
-            const allBinders = element.getAttribute('data-bind').split(";")
-            element.removeAttribute("data-bind")
-            allBinders.forEach(binder => {
-                const [prop, bindAttr] = binder.split(':');
-                const [propType, propName] = prop.split("_");
-                if (!Monom.bindedElements[bindAttr]) {
-                    Monom.bindedElements[bindAttr] = [];
-                }
-                Monom.bindedElements[bindAttr].push({ element, propType, propName });
-                const [model, object] = Monom.pathFromObject(Monom.state, bindAttr)
-                if (propType == "attr") return
-                    //Monom.getMutationObserver(bindAttr).observe(element, { attributes: true, attributeOldValue: true });
-                const [listener, property] = Monom.getListenerForElement(element);
-                Monom.setElementListener(element, listener, property, bindAttr);
-                Monom.updateDomElement(element, propName, propType, model, object);
-            })
+            Monom.proceedingElement(element);
         });
+    }
+
+    static proceedingElement(element) {
+        const allBinders = element.getAttribute('data-bind').split(";")
+        element.removeAttribute("data-bind")
+        allBinders.forEach(binder => {
+            const [prop, bindAttr] = binder.split(':');
+            const [propType, propName] = prop.split("_");
+            if (!Monom.bindedElements[bindAttr]) {
+                Monom.bindedElements[bindAttr] = [];
+            }
+            Monom.bindedElements[bindAttr].push({ element, propType, propName });
+            const [model, object] = Monom.objectFromPath(Monom.state, bindAttr)
+            if (propType == "attr") return
+            const [listener, property] = Monom.getListenerForElement(element);
+            Monom.setElementListener(element, listener, property, bindAttr);
+            Monom.updateDomElement(element, propName, propType, model, object);
+        })
     }
 
     static updateDomElement(element, property, type, model, object) {
@@ -51,7 +59,7 @@ class Monom {
             const objects = Monom.bindedElements[paths.objKey + '.' + key];
             if (!objects) return
             objects.forEach(obj => {
-                const [model, object] = Monom.pathFromObject(proxyObject, key)
+                const [model, object] = Monom.objectFromPath(proxyObject, key)
                 Monom.updateDomElement(obj.element, obj.propName, obj.propType, model, object)
             })
         })
@@ -66,7 +74,7 @@ class Monom {
     }
 
     static setNewValue(key, value, sender) {
-        const [model, object] = Monom.pathFromObject(Monom.state, key)
+        const [model, object] = Monom.objectFromPath(Monom.state, key)
         model[object] = value;
         const elements = Monom.bindedElements[key];
         elements.forEach(element => {
@@ -88,7 +96,7 @@ class Monom {
         return allKeys;
     }
 
-    static pathFromObject(model, path) {
+    static objectFromPath(model, path) {
         const levels = path.split(".");
         const object = levels.pop();
         levels.forEach(level => {
@@ -98,6 +106,14 @@ class Monom {
             model = model[level];
         });
         return [model, object];
+    }
+
+    static getMutationObserver() {
+        return new MutationObserver(entries => {
+            entries.forEach(entry => {
+                Monom.getBindedElements(entry.target)
+            })
+        });
     }
 
     /*static getMutationObserver(path) {
