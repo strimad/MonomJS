@@ -67,8 +67,11 @@ class Monom {
 
     static createReferenceToObject(obj, objBase, objKey = null) {
         if (objKey) {
-            const allKeys = { objKey, keys: Monom.objectToPaths(objBase[objKey]) };
-            Monom.updateDom(obj, allKeys);
+            const keys = Monom.objectToPaths(objBase[objKey]);
+            if(keys) {
+                const allKeys = { objKey, keys };
+                Monom.updateDom(obj, allKeys);
+            }
         }
         return obj;
     }
@@ -84,6 +87,7 @@ class Monom {
     }
 
     static objectToPaths(obj, keyString = "", allKeys = []) {
+        if(typeof obj != "object") return;
         const keys = Object.keys(obj)
         keys.forEach(key => {
             if (typeof obj[key] == "object") {
