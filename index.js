@@ -14,19 +14,22 @@ const state = {
         }
     }
 }
-document.addEventListener('DOMContentLoaded', () => {
-    Monom.setStateModel(state)
-    init();
-    Monom.init(document)
-});
 
 const init = () => {
-    Monom.state.proxyTest = Monom.createReferenceToObject(Monom.state.track[1], Monom.state.proxyTest)
+    state.proxyTest = Monom.createReferenceToObject(state.track[1], state)
 
     const radios = document.querySelectorAll("[type='radio']")
     radios.forEach((radio, index) => {
         radio.addEventListener("change", () => {
-            Monom.state.proxyTest = Monom.createReferenceToObject(Monom.state.track[index + 1], Monom.state, "proxyTest")
+            state.proxyTest = Monom.createReferenceToObject(state.track[index + 1], state)
         })
     })
 }
+
+await Monom.init(state, document)
+init();
+
+
+setInterval(() => {
+    console.log(state)
+}, 3000)
