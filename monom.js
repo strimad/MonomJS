@@ -5,7 +5,7 @@ export class Monom {
     static init(model, view) {
         return new Promise((resolve, reject) => {
             Monom.model = model;
-            model.reference = {};
+            //Monom.model = Object.assign(model);
             Monom.#getViewMutationObserver().observe(view, { childList: true, subtree: true });
             Monom.#getBindedElements(view)
             resolve();
@@ -27,9 +27,10 @@ export class Monom {
                 }
 
                 const [model, object] = Monom.#objectFromPath(Monom.model, propPath)
+                let _value = model[object];
 
                 if (propType == "attr") {
-                    if (model[object] != null && model[object] != undefined) {
+                    if (_value != null && _value != undefined) {
                         element.setAttribute(propName, model[object]);
                     } else {
                         model[object] = element.getAttribute(propName);
@@ -45,7 +46,7 @@ export class Monom {
                         attributeOldValue: true
                     });
                 } else if (propType == "prop") {
-                    if (model[object] != null && model[object] != undefined) {
+                    if (_value != null && _value != undefined) {
                         element[propName] = model[object];
                     } else {
                         model[object] = element[propName];
@@ -64,7 +65,7 @@ export class Monom {
                         childList: true
                     });
                 } else {
-                    if (model[object] != null && model[object] != undefined) {
+                    if (_value != null && _value != undefined) {
                         element[propName] = model[object];
                     } else {
                         model[object] = element[propName];
@@ -79,7 +80,7 @@ export class Monom {
                         model[object] = element[property];
                     })
                 }
-                let  _value = model[object];
+
                 Object.defineProperty(model, object, {
                     get: () => {
                         if (_value != null && _value != undefined) {
@@ -92,112 +93,49 @@ export class Monom {
                         }
                     },
                     set: (value) => {
-                        if (model[object] !== _value && value != null && value != undefined) {
+                        if (value !== _value && value != null && value != undefined) {
                             _value = value;
-                            Monom.subscribers[propPath].forEach(subscriber => {
-                                subscriber.callback(value);
-                            })
+                            Monom.#updateDom(propPath, value);
                         }
-                    },
-                    enumerable: true,
-                    configurable: true
+                    }
                 })
             })
         })
     }
 
-    static createReferenceToObject(obj, objProxy, notObject = null) {
-        const path = Monom.#objectToPath(Monom.model, objProxy, notObject);
-        const path2 = Monom.#objectToPath(Monom.model, obj);
-        
-        console.log(path)
-        console.log(path2)
-
-        if (path) {
-            Object.keys(obj).forEach(key => {
-                if (Monom.subscribers[`${path}.${key}`]) {
-                    Monom.subscribers[`${path}.${key}`].forEach(subscriber => {
-                        subscriber.callback(obj[key]);
-                    })
-                }
-
-                let _value = obj[key];
-                Object.defineProperty(obj, key, {
-                    get: () => {
-                        return _value;
-                    },
-                    set: (value) => {
-                        if (_value !== value && value != null && value != undefined) {
-                            _value = value;
-                            objProxy[key] = value;    
-                            if (Monom.subscribers[`${path}.${key}`]) {
-                                Monom.subscribers[`${path}.${key}`].forEach(subscriber => {
-                                    subscriber.callback(value);
-                                })
-                            }
-                        }
-                    }
-                })
-
-                
+    static createReferenceToObject(obj, objProxy, keyProxy) {
+        const paths = Monom.#objectToPath(Monom.model, objProxy);
+        const objRef = obj;
+        Object.keys(objRef).forEach(key => {
+            paths.forEach(path => {
+                Monom.#updateDom(`${path}.${keyProxy}.${key}`, objRef[key]);
             })
-            /*Object.keys(objProxy).forEach(key => {
-                if (Monom.subscribers[`${path2}.${key}`]) {
-                    Monom.subscribers[`${path2}.${key}`].forEach(subscriber => {
-                        subscriber.callback(objProxy[key]);
-                    })
-                }
-                let _value = objProxy[key]
-                Object.defineProperty(objProxy, key, {
-                    get: () => {
-                        return _value;
-                    },
-                    set: (value) => {
-                        if (_value !== value && value != null && value != undefined) {
-                            _value = value;
-                            obj[key] = value;
-                            if (Monom.subscribers[`${path2}.${key}`]) {
-                                Monom.subscribers[`${path2}.${key}`].forEach(subscriber => {
-                                    subscriber.callback(value);
-                                })
-                            }
-                        }
-                    }
-                })
-            })*/
-        }
 
-        return obj;
-
-        return new Proxy(obj, {
-            get(target, prop) {
-                return Reflect.get(target, prop)
-                //return target[prop]
-            },
-            set(target, prop, value) {
-                if(target[prop] == value) return true;
-                console.log(value)
-                
-                /*if (Monom.subscribers[`${path}.${prop}`]) {
-                    Monom.subscribers[`${path}.${prop}`].forEach(subscriber => {
-                        subscriber.callback(value);
-                    })
-                }*/
-                //Reflect.set(target, prop, value)
-
-                //target[prop] = value;
-                console.log(target[prop])
-                console.log(prop)
-                /*Object.keys(target).forEach(key => {
-                    if (Monom.subscribers[`${path}.${key}`]) {
-                        Monom.subscribers[`${path}.${key}`].forEach(subscriber => {
-                            subscriber.callback(value);
+            let _value = objRef[key];
+            Object.defineProperty(objRef, key, {
+                get: () => {
+                    return _value;
+                },
+                set: (value) => {
+                    //if (_value !== value && value != null && value != undefined) {
+                        _value = value;
+                        paths.forEach(path => {
+                            console.log(`${path}.${keyProxy}.${key}`)
+                            Monom.#updateDom(`${path}.${keyProxy}.${key}`, value);
                         })
-                    }  
-                })*/
-                return true;
-            }
+                    //}
+                }
+            })
         })
+        objProxy[keyProxy] = objRef;
+    }
+
+    static #updateDom(path, value) {
+        if (Monom.subscribers[path]) {
+            Monom.subscribers[path].forEach(subscriber => {
+                subscriber.callback(value);
+            })
+        }
     }
 
     static #objectFromPath(model, path) {
@@ -212,42 +150,25 @@ export class Monom {
         return [model, object];
     }
 
-    static #objectToPath(obj, target, notObject, path = null) {
+    static #objectToPath(obj, target, path = null) {
+        let paths = [];
         for (let key in obj) {
             const currentPath = path ? `${path}.${key}` : key;
             if (obj[key] === target) {
-                return currentPath;
+                paths.push(currentPath);
             }
-            if (typeof obj[key] === "object" && obj[key] !== notObject) {
-                const result = Monom.#objectToPath(obj[key], target, notObject, currentPath);
-                if (result) return result;
+            if (typeof obj[key] === "object") {
+                const result = Monom.#objectToPath(obj[key], target, currentPath);
+                if(result.length > 0) {
+                    paths.push(...result)
+                }
             }
         }
-        return null;
-    }
-
-    static #createProxy(target, element, propType, propPath) {
-        return new Proxy(target, {
-            get(obj, prop, receiver) {
-                if (!(prop in obj)) {
-                    if (propType == "attr") {
-                        return element.getAttribute(propName)
-                    }
-                    return element[propName];
-                }
-                return obj[prop];
-            },
-            set(obj, prop, value) {
-                if (value === null) return true;
-                if (value === undefined) return true;
-                if (obj[prop] === value) return true;
-                obj[prop] = value;
-                Monom.subscribers[propPath].forEach(subscriber => {
-                    subscriber.callback(value);
-                })
-                return true;
-            }
-        })
+        if(paths.length > 1) {
+            console.log(paths)
+        }
+        
+        return paths;
     }
 
     static #getViewMutationObserver() {
