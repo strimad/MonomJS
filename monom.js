@@ -1,3 +1,5 @@
+import { Settings } from "./settings.js";
+
 export class Monom {
     static model = {};
     static subscribers = {};
@@ -5,7 +7,6 @@ export class Monom {
     static init(model, view) {
         return new Promise((resolve, reject) => {
             Monom.model = model;
-            //Monom.model = Object.assign(model);
             Monom.#getViewMutationObserver().observe(view, { childList: true, subtree: true });
             Monom.#getBindedElements(view)
             resolve();
@@ -36,7 +37,7 @@ export class Monom {
                         model[object] = element.getAttribute(propName);
                     }
 
-                    Monom.subscribers[propPath].push({ element, callback: (value) => { element.setAttribute(propName, value); } });
+                    Monom.subscribers[propPath].push({ element, callback: (value) => { element.setAttribute(propName, value) }});
 
                     Monom.#getElementMutationObserver(propType, propName, (value) => {
                         const [model, object] = Monom.#objectFromPath(Monom.model, propPath)
@@ -52,7 +53,7 @@ export class Monom {
                         model[object] = element[propName];
                     }
 
-                    Monom.subscribers[propPath].push({ element, callback: (value) => { element[propName] = value; } });
+                    Monom.subscribers[propPath].push({ element, callback: (value) => { element[propName] = value }});
 
                     Monom.#getElementMutationObserver(propType, propName, (value) => {
                         const [model, object] = Monom.#objectFromPath(Monom.model, propPath)
@@ -71,7 +72,7 @@ export class Monom {
                         model[object] = element[propName];
                     }
 
-                    Monom.subscribers[propPath].push({ element, callback: (value) => { element[propName] = value; } });
+                    Monom.subscribers[propPath].push({ element, callback: (value) => { element[propName] = value }});
 
                     const [listener, property] = Monom.#getListenerForElement(element);
                     element.addEventListener(listener, (event) => {
@@ -104,30 +105,82 @@ export class Monom {
     }
 
     static createReferenceToObject(obj, objProxy, keyProxy) {
-        const paths = Monom.#objectToPath(Monom.model, objProxy);
-        const objRef = obj;
-        Object.keys(objRef).forEach(key => {
-            paths.forEach(path => {
-                Monom.#updateDom(`${path}.${keyProxy}.${key}`, objRef[key]);
-            })
+        Monom.#setDefaultSetter(objProxy[keyProxy]);
+        objProxy[keyProxy] = obj;
+        Monom.#setNewSetter(obj);
+    }
 
-            let _value = objRef[key];
-            Object.defineProperty(objRef, key, {
+    static #setDefaultSetter(obj) {
+        Object.keys(obj).forEach(key => {
+            if(typeof obj[key] == 'object') {
+                Monom.#setDefaultSetter(obj[key]);
+                return;
+            }
+            let _value = obj[key];
+            Object.defineProperty(obj, key, {
                 get: () => {
                     return _value;
                 },
                 set: (value) => {
-                    //if (_value !== value && value != null && value != undefined) {
-                        _value = value;
-                        paths.forEach(path => {
-                            console.log(`${path}.${keyProxy}.${key}`)
-                            Monom.#updateDom(`${path}.${keyProxy}.${key}`, value);
-                        })
-                    //}
+                    _value = value;
                 }
             })
         })
-        objProxy[keyProxy] = objRef;
+    }
+
+    static #setNewSetter(obj) {
+        const paths = Monom.#objectToPaths(Monom.model, obj);
+        Object.keys(obj).forEach(key => {
+            if(typeof obj[key] == 'object') {
+                Monom.#setNewSetter(obj[key]);
+                return;
+            }
+            let _value = obj[key];
+            Object.defineProperty(obj, key, {
+                get: () => {
+                    return _value;
+                },
+                set: (value) => {
+                    if (_value !== value && value != null && value != undefined) {
+                        _value = value;
+                        paths.forEach(path => {
+                            Monom.#updateDom(`${path}.${key}`, value);
+                        })
+                    }
+                }
+            })
+            paths.forEach(path => {
+                Monom.#updateDom(`${path}.${key}`, obj[key]);
+            })
+        })
+    }
+
+    static #objectToPaths(objBase, target, path = null) {
+        let paths = [];
+        for (const key in objBase) {
+            const currentPath = path ? `${path}.${key}` : key;
+            if (objBase[key] === target) {
+                paths.push(currentPath);
+            } else if (typeof objBase[key] === "object") {
+                const result = Monom.#objectToPaths(objBase[key], target, currentPath);
+                if (result.length > 0) {
+                    paths.push(...result)
+                }
+            }
+        }
+        return paths;
+    }
+
+    static #objectFromPath(model, path) {
+        const levels = path.split(".");
+        const object = levels.pop();
+        for (const level of levels) {
+            if (!model[level]) {
+                model[level] = {};
+            }
+            model = model[level];
+        }
+        return [model, object];
     }
 
     static #updateDom(path, value) {
@@ -136,39 +189,6 @@ export class Monom {
                 subscriber.callback(value);
             })
         }
-    }
-
-    static #objectFromPath(model, path) {
-        const levels = path.split(".");
-        const object = levels.pop();
-        levels.forEach(level => {
-            if (!model[level]) {
-                model[level] = {};
-            }
-            model = model[level];
-        });
-        return [model, object];
-    }
-
-    static #objectToPath(obj, target, path = null) {
-        let paths = [];
-        for (let key in obj) {
-            const currentPath = path ? `${path}.${key}` : key;
-            if (obj[key] === target) {
-                paths.push(currentPath);
-            }
-            if (typeof obj[key] === "object") {
-                const result = Monom.#objectToPath(obj[key], target, currentPath);
-                if(result.length > 0) {
-                    paths.push(...result)
-                }
-            }
-        }
-        if(paths.length > 1) {
-            console.log(paths)
-        }
-        
-        return paths;
     }
 
     static #getViewMutationObserver() {
@@ -228,3 +248,74 @@ export class Monom {
         return [null, null];
     }
 }
+
+/*************************************************************************************************/
+export class AbstractComponent {
+    constructor(view, model = null) {
+        this.model = model;
+        this.className = this.constructor.name;
+        return new Promise(async (resolve, reject) => {
+            await this.#loadHtml(view);
+            resolve(this);
+        })
+    }
+    async #loadHtml(view) {
+        const htmlContent = await this.#getHtml(`${Settings.COMPONENTS_FOLDER_PATH}/${this.className}/${this.className}.html`);
+        const updatedHtml = this.#replaceVariablesInHtml(htmlContent, this);
+        const part = this.#parseHtml(htmlContent);
+        const styles = part.querySelectorAll("style [mno-href]");
+        const scripts = part.querySelectorAll("script [mno-src]");
+        styles.forEach(style => {
+            view.head.appendChild(style);
+        })
+        scripts.forEach(script => {
+
+        })
+        this.html = part.querySelector("body > *");
+        view.querySelector(this.className).replaceWith(this.html);
+        this.init();
+    }
+    #replaceVariablesInHtml(htmlContent, context) {
+        return htmlContent.replace(/\$\{([^}]+)\}/g, (match, expression) => {
+            try {
+                const fn = new Function('with(this) { return ' + expression + '; }');
+                return fn.call(context);
+            } catch (error) {
+                console.error(`Failed to evaluate expression: ${expression}`, error);
+                return match;
+            }
+        });
+    }
+    async #getHtml(url) {
+        const request = await fetch(url);
+        return (await request.text()).trim();
+    }
+    #parseHtml(html, querySelector = null) {
+        const parser = new DOMParser();
+        if(!querySelector) {
+            return parser.parseFromString(html, 'text/html');
+        }
+        return parser.parseFromString(html, 'text/html').querySelector(querySelector);
+    }
+
+    fireEvent(name, params = {}, source = null) {
+        if (!source) {
+            dispatchEvent(new CustomEvent(name, { detail: params }));
+            return;
+        }
+        source.dispatchEvent(new CustomEvent(name, { detail: params }));
+    }
+}
+
+const initCustomElements = () => {
+    Settings.CUSTOM_ELEMENTS.forEach(element => {
+        import(Settings.CUSTOM_ELEMENTS_PATH + "/" + element.name + "/" + element.name + ".js");
+        if(element.style) {
+            const style = document.createElement("link");
+            style.rel = "stylesheet";
+            style.href = Settings.CUSTOM_ELEMENTS_PATH + "/" + element.name + "/" + element.name + ".css";
+            document.head.appendChild(style);
+        }
+    })
+}
+initCustomElements();
